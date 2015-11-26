@@ -5,6 +5,7 @@ from constants import DATA_FOLDER
 from protos.objects import Listings, Followers, Following
 from dht.node import Node
 from binascii import unhexlify
+from collections import Counter
 
 
 class Database(object):
@@ -28,12 +29,16 @@ class Database(object):
             os.makedirs(DATA_FOLDER + "store/listings/contracts/")
         if not os.path.exists(DATA_FOLDER + "store/listings/in progress/"):
             os.makedirs(DATA_FOLDER + "store/listings/in progress/")
+        if not os.path.exists(DATA_FOLDER + "store/listings/unfunded/"):
+            os.makedirs(DATA_FOLDER + "store/listings/unfunded/")
         if not os.path.exists(DATA_FOLDER + "store/listings/trade receipts/"):
             os.makedirs(DATA_FOLDER + "store/listings/trade receipts/")
         if not os.path.exists(DATA_FOLDER + "store/media/"):
             os.makedirs(DATA_FOLDER + "store/media/")
         if not os.path.exists(DATA_FOLDER + "purchases/in progress/"):
             os.makedirs(DATA_FOLDER + "purchases/in progress/")
+        if not os.path.exists(DATA_FOLDER + "purchases/unfunded/"):
+            os.makedirs(DATA_FOLDER + "purchases/unfunded/")
         if not os.path.exists(DATA_FOLDER + "purchases/trade receipts/"):
             os.makedirs(DATA_FOLDER + "purchases/trade receipts/")
         if not os.path.isfile(DATABASE):
@@ -65,6 +70,8 @@ class Database(object):
     encryption_pubkey BLOB, subject TEXT, message_type TEXT, message TEXT, timestamp INTEGER,
     avatar_hash BLOB, signature BLOB, outgoing INTEGER, read INTEGER)''')
         cursor.execute('''CREATE INDEX index_messages_guid ON messages(guid);''')
+        cursor.execute('''CREATE INDEX index_messages_read ON messages(read);''')
+
 
         cursor.execute('''CREATE TABLE notifications(id TEXT PRIMARY KEY, guid BLOB, handle TEXT, type TEXT,
     order_id TEXT, title TEXT, timestamp INTEGER, image_hash BLOB, read INTEGER)''')
@@ -355,12 +362,24 @@ libbitcoinServer TEXT, SSL INTEGER, seed TEXT, terms_conditions TEXT, refund_pol
             cursor.execute('''SELECT DISTINCT guid FROM messages''',)
             guids = cursor.fetchall()
             ret = []
+            unread = self.get_unread()
             for g in guids:
                 cursor.execute('''SELECT avatar_hash FROM messages WHERE guid=? and message_type="CHAT"''', (g[0],))
                 val = cursor.fetchone()
                 if val is not None:
-                    ret.append({"guid": g[0], "avatar_hash": val[0]})
+                    ret.append({"guid": g[0],
+                                "avatar_hash": val[0].encode("hex"),
+                                "unread": 0 if g[0] not in unread else unread[g[0]]})
             return ret
+
+        def get_unread(self):
+            cursor = self.db.cursor()
+            cursor.execute('''SELECT guid FROM messages WHERE read=0 and outgoing=0''',)
+            ret = []
+            guids = cursor.fetchall()
+            for g in guids:
+                ret.append(g[0])
+            return Counter(ret)
 
         def mark_as_read(self, guid):
             cursor = self.db.cursor()
