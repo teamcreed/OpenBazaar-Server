@@ -2,8 +2,16 @@ __author__ = 'foxcarlos-TeamCreed'
 from os import getcwd
 from os.path import expanduser, join, isfile
 import ConfigParser
+from twisted.python import log, logfile
+from log import Logger, FileLogObserver
 
 PROTOCOL_VERSION = 5
+
+# logging
+logFile = logfile.LogFile.fromFullPath(join(expanduser('~'), 'OpenBazaar') + "debug.log", rotateLength=15000000, maxRotatedFiles=1)
+log.addObserver(FileLogObserver(logFile, level='info').emit)
+log.addObserver(FileLogObserver(level='info').emit)
+logger = Logger(system="OpenBazaard")
 
 dataFolderPath = expanduser('~')
 currentPath = getcwd()
@@ -15,6 +23,7 @@ fc = ConfigParser.ConfigParser(allow_no_value=True)
 if not isfile(finalFileConfig):
     message = 'The file Config "{0}" not found'.format(finalFileConfig)
     print message
+    logger.error(message)
 else:
     fc.read(finalFileConfig)
 
